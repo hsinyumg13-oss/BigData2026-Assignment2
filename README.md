@@ -32,6 +32,10 @@ work is for educational use within the course.
 | Validation label weeks | 3 weeks, cutoffs 2026-10-24, 10-31, 11-07 12:00 (rolling time split, all after the training weeks) | cutoffs at 20:00 |
 | Test week | 2026-11-21 16:00 – 2026-11-28 16:00 | 2026-11-22 00:00 – 11-29 00:00 |
 
+The table above is the final run (data end 2026-11-21 12:00 UTC). All numbers in **Results** below come from
+experiments with data end 2026-11-16 00:00 UTC, so their 3 validation weeks are the cutoffs 2026-10-19 / 10-26 /
+11-02 00:00 UTC (5.5 days earlier, same 4-hour gap).
+
 The end of the data is **fixed** (`DATA_END` in `run_all.sh`, `--data_end` in `src/train.py`):
 the scripts download exactly these hours and ignore any row after `DATA_END`, so running the
 pipeline at any later time reproduces `output_113701031.csv`. LightGBM runs in deterministic mode
