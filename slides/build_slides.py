@@ -154,7 +154,7 @@ def main(skel, out, url):
     # ---------------- 3 Q1 schema
     s = S[2]
     header(s, None, None)
-    pic(s, "schema_graph.png", 0.35, 1.05, h=4.25)
+    pic(s, "schema_graph.png", 0.35, 1.23, w=4.6)
     text(s, 5.05, 1.15, 4.65, 4.1, [
         ("8 tables built by scripts/preprocess.py", {"b": True, "size": 12}),
         ("Nodes = tables; PK marked, each FK field points to the PK it references (20 FK edges incl. the self-loop PRReviewComments.in_reply_to_id)", {"bullet": True}),
