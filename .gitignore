@@ -1,0 +1,15 @@
+gharchive_cohort/
+data/
+cache/
+logs/
+__pycache__/
+*.pkl
+data_dev/
+dev_raw/
+cache_dev/
+README_old.md
+old_output/
+slides/r/
+slides/draft.*
+output_lgb.csv
+slides/video_script_zh.md
