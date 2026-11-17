@@ -51,7 +51,9 @@ def label(t):
     for c, k in TABLES[t]:
         tag = {"PK": "<B>PK</B>", "FK": "FK", "FK*": "FK, L", "T": "row time", "L": "L"}.get(k, " ")
         name = f"<B><U>{c}</U></B>" if k == "PK" else (f"<I>{c}</I>" if k.startswith("FK") else html.escape(c))
-        p1, p2 = (f' PORT="{c}"', "") if k == "PK" else ("", f' PORT="{c}"')
+        # FK edges leave from the right cell (east side); the name cell also gets a port so the
+        # self-reference can leave from the table's left edge instead of from inside the box
+        p1, p2 = (f' PORT="{c}"', "") if k == "PK" else (f' PORT="{c}_name"', f' PORT="{c}"')
         rows.append(f'<TR><TD ALIGN="LEFT"{p1}>{name}</TD>'
                     f'<TD ALIGN="LEFT"{p2}><FONT POINT-SIZE="9" COLOR="#666666">{tag}</FONT></TD></TR>')
     return '<<TABLE BORDER="1" CELLBORDER="0" CELLSPACING="0" CELLPADDING="3">' + "".join(rows) + "</TABLE>>"
@@ -74,7 +76,7 @@ def main(out="figures/schema_graph"):
                 s.node(t, label(t))
     for t, c, r in FKS:
         if t == r:   # self reference (reply thread)
-            g.edge(f"{t}:{c}:w", f"{r}:{PK[r]}:w", constraint="false")
+            g.edge(f"{t}:{c}_name:w", f"{r}:{PK[r]}:w", constraint="false")
         else:
             g.edge(f"{t}:{c}:e", f"{r}:{PK[r]}:w")
     g.render(out, cleanup=True)
