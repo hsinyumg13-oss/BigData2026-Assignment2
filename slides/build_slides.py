@@ -146,7 +146,7 @@ def main(skel, out, url):
     text(s, 5.75, 3.2, 3.9, 1.9, [
         ("Main findings", {"b": True, "size": 12}),
         ("Time encoding is what makes the GNN work (+0.031)", {"bullet": True}),
-        ("Capture-rate covariates hurt under the GH Archive collapse (-0.026)", {"bullet": True}),
+        ("Capture-rate covariates hurt under the GH Archive collapse (-0.026 when added to T + R)", {"bullet": True}),
         ("Most single feature groups are redundant (within noise)", {"bullet": True}),
         ("~2/3 of positives are 'new' activity - the hard part", {"bullet": True}),
     ], size=10)
@@ -175,9 +175,10 @@ def main(skel, out, url):
     table(s, [["", "UTC", "Taiwan time"],
               ["GH Archive hours used (8,532 files)", "2025-12-01 00:00 - 2026-11-21 12:00 (excl.)", "12-01 08:00 - 11-21 20:00"],
               ["Training label weeks (36 cutoffs)", "cutoffs 2026-02-14 12:00 ... 10-17 12:00", "+4 h gap, 7-day label week"],
-              ["Validation label weeks (3)", "cutoffs 10-24, 10-31, 11-07 (12:00)", "rolling, after all training weeks"],
+              ["Validation label weeks (3), final run", "cutoffs 10-24, 10-31, 11-07 (12:00)", "rolling, after all training weeks"],
+              ["Validation weeks of the report results", "cutoffs 10-19, 10-26, 11-02 (00:00), data end 11-16 00:00", "slides 6-15; same 4 h gap, 5.5 d earlier"],
               ["Test week", "2026-11-21 16:00 - 11-28 16:00", "11-22 00:00 - 11-29 00:00"]],
-          0.45, 4.0, 9.1, [3.0, 3.4, 2.7], size=8.5, rowh=0.22)
+          0.45, 3.95, 9.1, [3.0, 3.4, 2.7], size=8.5, rowh=0.22)
     notes(s, "The end of the data is fixed so the TA's re-run downloads the same hours and reproduces the output.")
 
     # ---------------- 5 Q2 approach
@@ -294,7 +295,7 @@ def main(skel, out, url):
         ("Significant", {"b": True, "size": 12}),
         (f"GNN time encoding: {gnt['mean_model']:.3f} -> {gnn['mean_model']:.3f} (+{gnn['mean_model'] - gnt['mean_model']:.3f})", {"bullet": True}),
         ("Recency-weighted training (half-life 8 weeks) hurts: older weeks still help", {"bullet": True}),
-        ("Capture-rate covariates (same for every user in a week): -0.033 here, -0.043 on the validation weeks before 9/27, yet +0.014 on the 9/27 back-test -> unstable, left out (chosen on validation)", {"bullet": True}),
+        ("Capture-rate covariates (same for every user in a week): T + R + C is 0.026 below T + R here, 0.043 below on the validation weeks before 9/27, yet 0.014 above on the 9/27 back-test -> unstable, left out (chosen on validation)", {"bullet": True}),
         ("Within noise", {"b": True, "size": 12}),
         ("Each temporal sub-group alone: the windows, lags and decays carry overlapping information; only plain window counts is as good", {"bullet": True}),
         ("Recorded-day recency and label masking: about 0 on these weeks (still kept: they avoid a known bias)", {"bullet": True}),
