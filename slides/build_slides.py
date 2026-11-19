@@ -154,8 +154,8 @@ def main(skel, out, url):
     # ---------------- 3 Q1 schema
     s = S[2]
     header(s, None, None)
-    pic(s, "schema_graph.png", 0.35, 1.23, w=4.6)
-    text(s, 5.05, 1.15, 4.65, 4.1, [
+    pic(s, "schema_graph.png", 0.2, 1.0, h=4.28)
+    text(s, 5.38, 1.15, 4.4, 4.1, [
         ("8 tables built by scripts/preprocess.py", {"b": True, "size": 12}),
         ("Nodes = tables; PK marked, each FK field points to the PK it references (20 FK edges incl. the self-loop PRReviewComments.in_reply_to_id)", {"bullet": True}),
         ("Row time (when a row can be used): first_seen_at for entity tables, created_at for comment / push rows", {"bullet": True}),
@@ -166,7 +166,7 @@ def main(skel, out, url):
               ["Users", "46,197", "IssueComments", "108,021"],
               ["Repositories", "111,025", "PRReviews", "92,702"],
               ["PullRequests", "309,787", "PRReviewComments", "67,193"],
-              ["Issues", "177,265", "Pushes", "1,672,328"]], 5.1, 3.95, 4.5, [1.15, 0.9, 1.5, 0.95], size=9, rowh=0.22)
+              ["Issues", "177,265", "Pushes", "1,672,328"]], 5.38, 4.1, 4.4, [1.12, 0.88, 1.47, 0.93], size=9, rowh=0.22)
 
     # ---------------- 4 Q1 time period
     s = S[3]
@@ -208,8 +208,9 @@ def main(skel, out, url):
 
     # ---------------- 6 Q2 results
     s = S[5]
-    header(s, "(3%) Question 2 · Results", "LightGBM ablation (95% paired-bootstrap intervals) and the graph model")
-    pic(s, "ablation_q2.png", 0.3, 1.0, h=4.3)
+    header(s, "(3%) Question 2 · Results", "Hand-made joins add little; learned joins (RDL GNN) match the feature model")
+    pic(s, "ablation_q2.png", 0.3, 1.2, h=4.085)
+    text(s, 0.3, 0.98, 5.57, 0.22, [("T = temporal features, R = relational (FK-join) features, C = capture-rate covariates", {"i": True, "size": 9})])
     text(s, 6.25, 1.1, 3.45, 4.1, [
         ("Findings", {"b": True, "size": 12}),
         (f"Hand-made FK features: no group is significant; T only = {J('T_only')['mean_model']:.3f} vs T + R = {lgb['mean_model']:.3f}. Relational counts are largely redundant with the user's own temporal history.", {"bullet": True}),
@@ -289,8 +290,9 @@ def main(skel, out, url):
 
     # ---------------- 10 Q3 ablation
     s = S[9]
-    header(s, "(5%) Question 3 · Ablation", "Ablation (LightGBM unless noted), 95% paired-bootstrap intervals")
-    pic(s, "ablation_q3.png", 0.3, 1.0, h=4.3)
+    header(s, "(5%) Question 3 · Ablation", "Only the GNN time encoding is a clear, significant gain; feature groups overlap")
+    pic(s, "ablation_q3.png", 0.3, 1.2, h=4.085)
+    text(s, 0.3, 0.98, 4.93, 0.22, [("T = temporal features, R = relational (FK-join) features, C = capture-rate covariates", {"i": True, "size": 9})])
     text(s, 5.6, 1.1, 4.1, 4.1, [
         ("Significant", {"b": True, "size": 12}),
         (f"GNN time encoding: {gnt['mean_model']:.3f} -> {gnn['mean_model']:.3f} (+{gnn['mean_model'] - gnt['mean_model']:.3f})", {"bullet": True}),
@@ -351,7 +353,8 @@ def main(skel, out, url):
 
     # ---------------- 14 Q4 results
     s = S[13]
-    header(s, "(5%) Question 4 · Results", "3 validation weeks and a back-test on the README week 2026/09/27 - 10/04")
+    header(s, "(5%) Question 4 · Results", "Submitted hybrid: 0.540 on the unseen back-test week, +0.04 over copy-last-week")
+    [sh for sh in s.shapes if sh.has_text_frame and "Question" in sh.text_frame.text][0].width = Inches(9.3)
     rows = [["Model", "Validation (in-sample thr.)", "Leave-one-week-out", "Back-test 9/27"]]
     b = bt["backtest"] if bt else None
     rows.append(["copy last week", f"{c:.4f}", "-", "0.4994  (TA: 0.4961)"])
