@@ -1,182 +1,139 @@
-# BigData 2026 Fall – Assignment 2: Predicting GitHub User Activity
+# Assignment 2 – Predicting GitHub User Activity
 
-Student ID: 113701031
+**Big Data Analytics Techniques and Applications, Fall 2026 · Student ID 113701031**
 
-For every test user we predict whether they will perform each of 6 activities
-(`open_pr, open_issue, issue_comment, pr_review, pr_review_comment, push`) during the test week
-**2026/11/22 00:00 – 11/29 00:00 (Taiwan time)**. The model reads the 8 relational tables built by
-the course script `scripts/preprocess.py` and combines two branches:
+For each of the 4,465 test users, predict whether they will **open_pr, open_issue, issue_comment,
+pr_review, pr_review_comment, push** during **2026/11/22 00:00 – 11/29 00:00 (Taiwan time)**.
 
-* **Feature branch** – temporal and cross-table (foreign-key) features per (user, cutoff time),
-  one LightGBM classifier per activity;
-* **Graph branch (Relational Deep Learning)** – every row of every table is a node and every
-  foreign key an edge; a heterogeneous GraphSAGE with a time encoding predicts the 6 activities
-  from the Users nodes;
+Two branches on the 8 relational tables, blended per activity:
 
-and blends them per activity (weights and thresholds chosen on the validation weeks only).
+| Branch | Model | Answers |
+|---|---|---|
+| Feature branch | temporal + foreign-key-join features per (user, cutoff t) → one LightGBM per activity | Q2 (a), Q3 |
+| Graph branch (Relational Deep Learning) | every row a node, every FK an edge → heterogeneous GraphSAGE with a time encoding | Q2 (b), Q3 |
+
+Report: [`slides/Asg2_113701031.pdf`](slides/Asg2_113701031.pdf)
 
 ## Data Source
 
-The data used in this assignment is sourced from **[GH Archive](https://www.gharchive.org/)**
-(https://www.gharchive.org/), a publicly available archive of GitHub events. It is processed with
-the course script `scripts/preprocess.py` (unchanged), which builds the 8 tables and anonymizes them.
-No other data is used (no GitHub API, no other GH Archive event types, no other websites). This
-work is for educational use within the course.
+The data is sourced from **[GH Archive](https://www.gharchive.org/)** (https://www.gharchive.org/), a public
+archive of GitHub events, and processed with the course script `scripts/preprocess.py` (unchanged), which
+builds the 8 tables and anonymizes them. No other data is used (no GitHub API, no other GH Archive event
+types, no other websites). For educational use within the course.
+
+## How to run
+
+```bash
+pip install -r requirements.txt     # CPU torch: add --extra-index-url https://download.pytorch.org/whl/cpu
+./run_all.sh                        # -> output_113701031.csv + official format check
+```
+
+`run_all.sh` runs 7 steps; each script can also be run on its own (the exact commands are in `run_all.sh`).
+
+| Step | Script | Output |
+|---|---|---|
+| 1. Download GH Archive, keep the cohort's events | `src/download_filter.py` | `gharchive_cohort/*.json.gz` |
+| 2. Build the 8 tables (course script, unchanged) | `scripts/preprocess.py` | `data/db/*.parquet` |
+| 3. Daily coverage / capture rate per event type | `src/coverage.py` | `data/coverage.csv` |
+| 4. Feature branch: snapshots, validation, LightGBM × 6 | `src/train.py` | probabilities in `cache/` |
+| 5. Graph branch (RDL): GraphSAGE | `src/gnn.py` | probabilities in `cache/` |
+| 6. Blend + thresholds → final predictions | `src/blend.py` | `output_113701031.csv` |
+| 7. Format check | `scripts/evaluate.py` | – |
+
+Notes
+
+* **Step 1** downloads each hour file and keeps only the lines `preprocess.py` itself keeps (it calls
+  `preprocess.extract_hour`: cohort users, the 6 event types, no bots), so step 2 gives the same tables as on
+  the raw files with ~1 % of the disk space. The download is resumable; an hour that GH Archive answers with
+  404 is marked `*.missing` and skipped. If you already have the raw files, run step 2 on your own folder.
+* **Reproducible:** the data end is fixed (`DATA_END` in `run_all.sh`), so a later run downloads the same
+  8,532 hours and ignores anything after it. LightGBM runs in deterministic mode, the GNN with a fixed seed,
+  and package versions are pinned in `requirements.txt`.
 
 ## Dataset time period
 
 | | UTC | Taiwan time |
 |---|---|---|
-| GH Archive hour files used | 2025-12-01 00:00 – 2026-11-21 12:00 (exclusive), 8,532 files | 2025-12-01 08:00 – 2026-11-21 20:00 |
-| Training label weeks | 36 weeks, cutoffs t = 2026-02-14 12:00 … 2026-10-17 12:00 (every 7 days); labels in [t + 4 h, t + 4 h + 7 d) | cutoffs at 20:00 |
-| Validation label weeks | 3 weeks, cutoffs 2026-10-24, 10-31, 11-07 12:00 (rolling time split, all after the training weeks) | cutoffs at 20:00 |
-| Test week | 2026-11-21 16:00 – 2026-11-28 16:00 | 2026-11-22 00:00 – 11-29 00:00 |
+| GH Archive hours used (8,532 files) | 2025-12-01 00:00 – 2026-11-21 12:00 (excl.) | 2025-12-01 08:00 – 2026-11-21 20:00 |
+| Training label weeks (36) | cutoffs t = 2026-02-14 12:00 … 10-17 12:00, every 7 days | t at 20:00 |
+| Validation label weeks (3) | cutoffs 2026-10-24, 10-31, 11-07 12:00 | t at 20:00 |
+| Test week | 2026-11-21 16:00 – 11-28 16:00 | 2026-11-22 00:00 – 11-29 00:00 |
 
-The table above is the final run (data end 2026-11-21 12:00 UTC). All numbers in **Results** below come from
-experiments with data end 2026-11-16 00:00 UTC, so their 3 validation weeks are the cutoffs 2026-10-19 / 10-26 /
-11-02 00:00 UTC (5.5 days earlier, same 4-hour gap).
-
-The end of the data is **fixed** (`DATA_END` in `run_all.sh`, `--data_end` in `src/train.py`):
-the scripts download exactly these hours and ignore any row after `DATA_END`, so running the
-pipeline at any later time reproduces `output_113701031.csv`. LightGBM runs in deterministic mode
-(fixed seed, 2 threads); the GNN uses a fixed seed.
-
-## How to run
-
-```bash
-pip install -r requirements.txt   # CPU torch: add --extra-index-url https://download.pytorch.org/whl/cpu
-./run_all.sh            # -> output_113701031.csv, then the official format check
-```
-
-`run_all.sh` runs these steps (each can be run on its own):
-
-| Step | Command | Output |
-|---|---|---|
-| 1. Download GH Archive, keep the cohort's events | `python src/download_filter.py --start "2025-12-01 00:00" --end "2026-11-21 12:00" --out gharchive_cohort` | `gharchive_cohort/YYYY-MM-DD-H.json.gz` |
-| 2. Build the 8 tables (course script) | `python scripts/preprocess.py --raw gharchive_cohort --out data` | `data/db/*.parquet` |
-| 3. Coverage / capture rate per event type | `python src/coverage.py gharchive_cohort data/coverage.csv` | `data/coverage*.csv` |
-| 4. Feature branch: validation, training, prediction | `python src/train.py --db data/db --coverage data/coverage.csv --data_end "2026-11-21 12:00" --target_start "2026-11-22 00:00" --out output_lgb.csv` | probabilities in `cache/` |
-| 5. Graph branch (RDL) | `python src/gnn.py --db data/db --coverage data/coverage.csv --data_end "2026-11-21 12:00" --target_start "2026-11-22 00:00" --tag gnn_time` | probabilities in `cache/` |
-| 6. Hybrid + final output | `python src/blend.py --lgb lgb --gnn gnn_time --out output_113701031.csv` | `output_113701031.csv` |
-| 7. Format check | `python scripts/evaluate.py --pred output_113701031.csv --input submission/test_input.csv` | |
-
-**Step 1 note.** A raw GH Archive hour file is 20–200 MB. `download_filter.py` downloads each
-hour, keeps only the lines that `preprocess.py` itself keeps (it calls `preprocess.extract_hour`:
-actor in the 9,000-user cohort, the 6 event types, no bots), writes them back under the same file
-name and deletes the raw file. `preprocess.py` on this folder gives the same tables as on the raw
-files. If you already have the raw files, run step 2 on your own folder instead; steps 4–6 ignore
-everything after `DATA_END`.
-
-## Repository layout
-
-```
-scripts/                 course files (preprocess.py, evaluate.py, cohort.txt) – unchanged
-submission/              test_input.csv, sample_submission.csv – unchanged
-src/
-  download_filter.py     step 1
-  coverage.py            step 3: daily coverage + capture rate of each event type
-  features.py            temporal and relational features, labels, cut at DATA_END
-  train.py               snapshots, time-split validation, LightGBM x 6, thresholds
-  gnn.py                 relational entity graph + heterogeneous GraphSAGE (RDL)
-  blend.py               hybrid of the two branches
-  significance.py        paired bootstrap of the ablations (validation weeks)
-  bt_bootstrap.py        paired bootstrap on the back-test week
-  error_analysis.py      precision / recall, repeat vs new activity
-  schema_graph.py  timeline_figure.py  framework_figure.py  capture_figure.py  results_figures.py   figures
-run_all.sh               full pipeline
-run_experiments.sh       all experiments of the report
-slides/                  Asg2_113701031.pptx / .pdf and build_slides.py (fills the TA template)
-figures/                 schema_graph.png, timeline.png, framework.png, capture_rate.png, ...
-```
+Each label week is [t + 4 h, t + 4 h + 7 d): the same 4-hour gap as between the end of the data and the test
+week. The **Results** below come from experiments with data end 2026-11-16 00:00 UTC, so their validation
+cutoffs are 2026-10-19 / 10-26 / 11-02 (5.5 days earlier, same gap).
 
 ## Method
 
-**Snapshots.** One training sample per (user, weekly cutoff t). A row of a table may be used at t only if
-its row time (`first_seen_at` for Users / Repositories / PullRequests / Issues / PRReviews, `created_at`
-for IssueComments / PRReviewComments / Pushes) is < t; the "known later" columns (`merged_at`,
-`merged_by_id`, `closed_at`, `state_reason`, `dismissed_at`) are used only if their own time is < t
-(`features.cut_tables`). Labels: whether the user does each activity in [t + 4 h, t + 4 h + 7 d) – the same
-4-hour gap as between the end of our data and the test week. Users: >= 3 target activities in the 91 days
-before t (this rule reproduces `test_input.csv` with F1 0.996).
-
-**GH Archive capture.** Since June 2026 GH Archive records only 10–30 % of the cohort's events
-(PushEvents ~0–3 % since 10/27, see `figures/capture_rate.png`). `src/coverage.py` measures it per day and
-event type; a (week, activity) label is used only if >= 70 % of the week was recorded (otherwise it is
-masked in the loss and in validation), and recency features count only recorded days.
-
-**Q2 – relations across tables.** (a) Feature branch: FK-join features – the user's own PRs / issues
-(open, merged in 28 d, draft / cross-repo), reviews and comments *received* from others
-(PRReviews / PRReviewComments -> PullRequests -> author, IssueComments -> Issues -> author), activity of
-other users in the user's repositories, review demand (new PRs in repos the user reviews), ownership
-(Users.login = Repositories.owner_login, org repos), push details, merges (`merged_by_id`, usable from
-`merged_at`). (b) Graph branch (Relational Deep Learning, `src/gnn.py`): every row with row time in
-[t – 56 d, t) is a node, every FK an edge (+ reverse edge); node inputs are the row's columns plus a time
-encoding; heterogeneous GraphSAGE (2 layers, hidden 64, mean + sum aggregation, residual + LayerNorm), user
-nodes -> 6 logits, masked BCE.
-
-**Q3 – time.** Counts in 1/3/7/14/28/56/112-day windows, 8 weekly lags, exponential decay (half-lives
-3/14/60 d), days since last / first activity (in recorded days), share of active weeks (4/8/16), weekday /
-night share, trend; in the GNN: log age, decays (1/7/28 d) and sin/cos of (t – row time). Rolling time
-split: 36 training weeks, then 3 validation weeks.
-
-**Model selection.** One LightGBM per activity (600 rounds, lr 0.03, 31 leaves, deterministic). Per
-activity, the threshold (max F1) and the hybrid weight p = w·p_LGB + (1–w)·p_GNN are chosen on the 3
-validation weeks; then both branches are retrained on all weeks and predict the test week.
+* **Point-in-time snapshots.** One sample per (user, weekly cutoff t). A row is used only if its row time
+  (`first_seen_at` for entity tables, `created_at` for comments / pushes) is before t; "known later" columns
+  (`merged_at`, `merged_by_id`, `closed_at`, `state_reason`, `dismissed_at`) only if their own time is before
+  t. Users: ≥ 3 target activities in the 91 days before t (reproduces `test_input.csv`, F1 0.996).
+* **GH Archive capture.** Since June 2026 GH Archive records only 10–30 % of the events (push ~0–3 % since
+  10/27, `figures/capture_rate.png`). A (week, activity) label is used only if ≥ 70 % of the week was
+  recorded, and recency counts only recorded days.
+* **Q2 – relations across tables.** (a) FK-join features: own PRs / issues, reviews and comments received,
+  activity of others in the user's repositories, review demand, ownership, push details, merges.
+  (b) RDL: rows with row time in [t − 56 d, t) as nodes, FKs (+ reverse) as edges, 2-layer heterogeneous
+  GraphSAGE, user nodes → 6 logits.
+* **Q3 – time.** Counts in 1–112-day windows, 8 weekly lags, exponential decay (half-lives 3 / 14 / 60 d),
+  recency, regularity, weekday / night share, trend; in the GNN a time encoding of t − row time.
+* **Selection.** Per activity, the threshold (max F1) and the blend weight
+  p = w · p_LightGBM + (1 − w) · p_GNN are chosen on the validation weeks only; both branches are then
+  retrained on all weeks and predict the test week.
 
 ## Results
 
-Score = (macro-F1 + micro-F1) / 2. Validation = 3 weeks with cutoffs 2026-10-19 / 10-26 / 11-02 (data end
-2026-11-16 for these experiments; push is recorded only in the first week). `[ ]` = 95 % paired-bootstrap
-interval over users of the difference to the base model (`src/significance.py`).
+Score = (macro-F1 + micro-F1) / 2.
 
-| Model | Validation (in-sample thresholds) | Leave-one-week-out | Back-test week 2026/09/27 |
+| Model | Validation (in-sample) | Leave-one-week-out | Back-test 2026/09/27 |
 |---|---|---|---|
-| copy last week | 0.3732 | – | 0.4994 (TA README: 0.4961) |
+| copy last week | 0.3732 | – | 0.4994 (TA: 0.4961) |
 | TA README: GNN without / with time | – | – | 0.3570 / 0.5482 |
 | LightGBM (T + R) | 0.4481 | 0.4333 | 0.5317 |
 | GNN without time encoding | 0.4185 | – | 0.4847 |
 | GNN + time encoding (RDL) | 0.4491 | 0.4421 | 0.5283 |
 | **hybrid (submitted)** | 0.4599 | 0.4333 | **0.5399** |
 
-* In-sample, the hybrid looks +0.012 better than LightGBM; with weights and thresholds tuned on the other
-  two weeks (leave-one-week-out) the gain disappears. On the back-test week – whose weights / thresholds come
-  only from the 3 weeks before it – the hybrid beats LightGBM by +0.008
-  (95 % CI 0.003 – 0.013). We submit the hybrid.
-* The time encoding is decisive for the GNN: +0.031 on validation,
-  +0.044 on the back-test.
-* On 9/27 we stay ~0.01 below the TA's GNN + time reference, with a comparable copy-last-week baseline.
+* On the unseen back-test week the hybrid beats LightGBM by +0.008 (95 % paired-bootstrap CI 0.003 – 0.013),
+  so it is submitted; in leave-one-week-out the in-sample gain of +0.012 disappears.
+* The time encoding is decisive for the GNN: +0.031 on validation, +0.044 on the back-test.
+* Main error: 58–76 % of the positives did not do that activity the week before; recall on them is
+  17–30 %, against 70–90 % for repeat users.
+* Limitation: only 3 validation weeks (push recorded in one), and the test labels come from the same
+  under-recording archive.
 
-### Q2 ablation (LightGBM, base = T + R = 0.4481)
+<details>
+<summary>Q2 ablation (LightGBM, base T + R = 0.4481; T = temporal, R = relational, C = capture-rate)</summary>
 
 | Variant | Validation | Difference [95 % CI] |
 |---|---|---|
 | temporal only (no relational) | 0.4503 | +0.0021 [-0.0039, +0.0087] |
-| T + R + capture-rate features | 0.4226 | - |
-| T + capture-rate features | 0.4157 | -0.0325 [-0.0451, -0.0208] |
-| - own PRs / issues | 0.4492 | +0.0010 [-0.0051, +0.0067] |
-| - feedback received | 0.4499 | +0.0017 [-0.0049, +0.0080] |
-| - repository neighbourhood | 0.4501 | +0.0019 [-0.0038, +0.0070] |
-| - review demand | 0.4516 | +0.0034 [-0.0025, +0.0096] |
-| - ownership / organisation | 0.4424 | -0.0057 [-0.0127, +0.0007] |
-| - push details | 0.4484 | +0.0002 [-0.0062, +0.0067] |
+| T + R + C | 0.4226 | – |
+| T + C | 0.4157 | -0.0325 [-0.0451, -0.0208] |
+| − own PRs / issues | 0.4492 | +0.0010 [-0.0051, +0.0067] |
+| − feedback received | 0.4499 | +0.0017 [-0.0049, +0.0080] |
+| − repository neighbourhood | 0.4501 | +0.0019 [-0.0038, +0.0070] |
+| − review demand | 0.4516 | +0.0034 [-0.0025, +0.0096] |
+| − ownership / organisation | 0.4424 | -0.0057 [-0.0127, +0.0007] |
+| − push details | 0.4484 | +0.0002 [-0.0062, +0.0067] |
 | RDL GNN (no hand-made features) | 0.4491 | +0.0010 [-0.0081, +0.0117] |
 
-No single relational group changes the score beyond noise; the capture-rate features (C) hurt
-significantly. Back-test check of the same choices (LightGBM, week 2026/09/27): T + R 0.5317, T only 0.5361,
-T + C + R 0.5459 – but on the three validation weeks before 9/27, T + C + R is 0.5060 against 0.5488 for
-T + R. C is unstable across weeks (it can only shift the weekly base rate), so it is left out, as chosen on
-validation. The GNN reaches the LightGBM level from the raw rows alone.
+No relational group changes the score beyond noise. C hurts on validation (and on the weeks before 9/27:
+T + R + C 0.5060 vs T + R 0.5488) but helps on 9/27 (0.5459 vs 0.5317): unstable, so left out.
+</details>
 
-### Q3 ablation
+<details>
+<summary>Q3 ablation (difference to T + R)</summary>
 
-| Variant | Validation | Difference to T + R [95 % CI] |
+| Variant | Validation | Difference [95 % CI] |
 |---|---|---|
-| - window counts | 0.4471 | -0.0011 [-0.0070, +0.0046] |
-| - weekly lags | 0.4517 | +0.0035 [-0.0024, +0.0097] |
-| - exponential decay | 0.4463 | -0.0018 [-0.0080, +0.0040] |
-| - recency | 0.4461 | -0.0021 [-0.0089, +0.0047] |
-| - regularity | 0.4501 | +0.0019 [-0.0037, +0.0075] |
-| - habits / trend | 0.4480 | -0.0001 [-0.0072, +0.0074] |
+| − window counts | 0.4471 | -0.0011 [-0.0070, +0.0046] |
+| − weekly lags | 0.4517 | +0.0035 [-0.0024, +0.0097] |
+| − exponential decay | 0.4463 | -0.0018 [-0.0080, +0.0040] |
+| − recency | 0.4461 | -0.0021 [-0.0089, +0.0047] |
+| − regularity | 0.4501 | +0.0019 [-0.0037, +0.0075] |
+| − habits / trend | 0.4480 | -0.0001 [-0.0072, +0.0074] |
 | only plain window counts | 0.4522 | +0.0040 [-0.0056, +0.0137] |
 | recency in calendar days | 0.4479 | -0.0002 [-0.0066, +0.0075] |
 | unrecorded weeks as negatives | 0.4525 | +0.0044 [-0.0004, +0.0095] |
@@ -185,20 +142,29 @@ validation. The GNN reaches the LightGBM level from the raw rows alone.
 | GNN without time encoding | 0.4185 | -0.0297 [-0.0398, -0.0187] |
 | GNN with time encoding | 0.4491 | +0.0010 [-0.0081, +0.0117] |
 
-Significant: the GNN time encoding, and recency-weighted training (hurts). The temporal feature groups
+Significant: the GNN time encoding (helps) and recency-weighted training (hurts). The temporal groups
 overlap, so removing one alone does not change the score.
+</details>
 
-### Error analysis (`src/error_analysis.py`)
+To reproduce every number: `./run_experiments.sh all`, then `python src/significance.py`,
+`python src/bt_bootstrap.py`, `python src/results_figures.py`, `python src/error_analysis.py`.
 
-58–76 % of the positives are users who did not do that activity in the previous week; recall on them is
-17–30 %, against 70–90 % for repeat users. With 10–30 % capture, part of "new" activity is only
-"not recorded last week". Push is predicted best (F1 0.68), pr_review_comment worst (0.33).
+## Repository layout
 
-### Limitations
-
-Only 3 validation weeks (push in one); the test labels come from the same under-recording archive, so the
-test score depends on GH Archive's capture during the test week.
-
-All numbers: `./run_experiments.sh all`, then `python src/significance.py`, `python src/bt_bootstrap.py`,
-`python src/results_figures.py`, `python src/error_analysis.py`.
-
+```
+run_all.sh            full pipeline (steps 1–7)
+run_experiments.sh    all experiments of the report
+scripts/              course files: preprocess.py, evaluate.py, cohort.txt (unchanged)
+submission/           test_input.csv, sample_submission.csv (unchanged)
+src/
+  download_filter.py  step 1 – download + cohort filter
+  coverage.py         step 3 – daily coverage / capture rate
+  features.py         temporal and relational features, labels, cut at the data end
+  train.py            step 4 – snapshots, validation, LightGBM, thresholds
+  gnn.py              step 5 – relational entity graph + heterogeneous GraphSAGE
+  blend.py            step 6 – blend of the two branches
+  significance.py, bt_bootstrap.py, error_analysis.py    statistics for the report
+  *_figure.py, schema_graph.py, results_figures.py       figures
+figures/              schema graph, timeline, framework, capture rate, ablations, error analysis
+slides/               report (pptx / pdf) and build_slides.py
+```
